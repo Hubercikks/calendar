@@ -13,6 +13,6 @@
     "luxon": "^3.4.3",
     "uuid": "^9.0.0",
     "puppeteer-core": "^21.3.8",
-    "chrome-aws-lambda": "^18.1.1"
+    "chrome-aws-lambda": "^10.1.0"
   }
 }
