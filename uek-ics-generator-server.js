@@ -1,6 +1,10 @@
+/*
+UEK ICS Generator (Node.js + Express + puppeteer-core)
+Pobiera harmonogram z UEK i generuje plik .ics
+*/
+
 const express = require('express');
-const fetch = require('node-fetch');
-const cheerio = require('cheerio');
+const puppeteer = require('puppeteer-core');
 const { DateTime } = require('luxon');
 const { v4: uuidv4 } = require('uuid');
 
@@ -15,8 +19,9 @@ function clean(s) {
   return (s || '').replace(/\s+/g, ' ').trim();
 }
 
-// --- Parser HTML UEK ---
+// --- Parser z HTML ---
 function parseSchedulePage(html) {
+  const cheerio = require('cheerio');
   const $ = cheerio.load(html);
   const events = [];
 
@@ -43,7 +48,7 @@ function parseSchedulePage(html) {
   return events;
 }
 
-// --- Build ICS ---
+// --- Budowanie ICS ---
 function buildICS(events) {
   const lines = [];
   lines.push('BEGIN:VCALENDAR');
@@ -80,13 +85,20 @@ function buildICS(events) {
 // --- Endpoint ICS ---
 app.get('/calendar.ics', async (req, res) => {
   const sourceUrl = req.query.url || DEFAULT_URL;
+
   try {
-    const response = await fetch(sourceUrl, { headers: { 'User-Agent': 'UEK-ICS-Generator/1.0' } });
-    if (!response.ok) return res.status(502).send('Bad upstream response');
+    // --- Puppeteer-core + systemowy Chromium ---
+    const browser = await puppeteer.launch({
+      executablePath: '/usr/bin/chromium-browser', // systemowy Chromium w Railway
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
 
-    const html = await response.text();
+    const page = await browser.newPage();
+    await page.goto(sourceUrl, { waitUntil: 'networkidle0' });
+    const html = await page.content();
+    await browser.close();
+
     const events = parseSchedulePage(html);
-
     if (!events.length) return res.status(500).send('No events parsed (layout may have changed)');
 
     const ics = buildICS(events);
@@ -99,7 +111,7 @@ app.get('/calendar.ics', async (req, res) => {
   }
 });
 
-// --- Root ---
+// --- Root UI ---
 app.get('/', (req, res) => {
   res.send(`
     <h3>UEK ICS Generator</h3>
