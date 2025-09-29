@@ -1,17 +1,18 @@
 {
   "name": "uek-calendar",
   "version": "1.0.0",
-  "description": "UEK schedule -> ICS generator",
-  "main": "uek-ics-generator-server.js",
+  "main": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node uek-ics-generator-server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
+    "node-fetch": "^2.6.7",
     "cheerio": "^1.0.0-rc.12",
     "luxon": "^3.4.3",
-    "node-fetch": "2.6.7",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "puppeteer-core": "^21.3.8",
+    "chrome-aws-lambda": "^19.1.1"
   }
 }
