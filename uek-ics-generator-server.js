@@ -20,7 +20,8 @@ function parseSchedulePage(html) {
   const $ = cheerio.load(html);
   const events = [];
 
-  $('table.table.table-bordered tr').each((_, row) => {
+  // Zmieniamy selektor, aby dopasować do aktualnej struktury tabeli
+  $('table.table.table-bordered tbody tr').each((_, row) => {
     const cells = $(row).find('td');
     if (cells.length >= 6) {
       const date = clean($(cells[0]).text());
