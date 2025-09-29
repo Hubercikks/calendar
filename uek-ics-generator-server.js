@@ -1,6 +1,5 @@
 const express = require('express');
-const chromium = require('chrome-aws-lambda');
-const puppeteer = require('puppeteer-core');
+const fetch = require('node-fetch');
 const cheerio = require('cheerio');
 const { DateTime } = require('luxon');
 const { v4: uuidv4 } = require('uuid');
@@ -11,13 +10,16 @@ const PORT = process.env.PORT || 3000;
 const DEFAULT_URL = 'https://planzajec.uek.krakow.pl/index.php?typ=G&id=187131&okres=2';
 const TIMEZONE = 'Europe/Warsaw';
 
+// --- Helper ---
 function clean(s) {
   return (s || '').replace(/\s+/g, ' ').trim();
 }
 
+// --- Parser HTML ---
 function parseSchedulePage(html) {
   const $ = cheerio.load(html);
   const events = [];
+
   $('table.table.table-bordered tr').each((_, row) => {
     const cells = $(row).find('td');
     if (cells.length >= 6) {
@@ -28,23 +30,25 @@ function parseSchedulePage(html) {
       const teacher = clean($(cells[4]).text());
       const room = clean($(cells[5]).text());
 
-      const timeMatch = timeRange.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
-      if (!timeMatch) return;
+      const match = timeRange.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+      if (!match) return;
 
-      const start = timeMatch[1];
-      const end = timeMatch[2];
+      const start = match[1];
+      const end = match[2];
 
       events.push({ date, start, end, title: subject, type, teacher, room });
     }
   });
+
   return events;
 }
 
+// --- Build ICS ---
 function buildICS(events) {
   const lines = [];
   lines.push('BEGIN:VCALENDAR');
   lines.push('VERSION:2.0');
-  lines.push('PRODID:-//UEK-ICS-Generator//pl');
+  lines.push('PRODID:-//UEK-ICS-Generator//PL');
   lines.push('CALSCALE:GREGORIAN');
   lines.push('METHOD:PUBLISH');
 
@@ -53,7 +57,7 @@ function buildICS(events) {
       const dtStart = DateTime.fromISO(ev.date + 'T' + ev.start, { zone: TIMEZONE });
       const dtEnd = DateTime.fromISO(ev.date + 'T' + ev.end, { zone: TIMEZONE });
       const fmt = dt => dt.toFormat("yyyyLLdd'T'HHmmss");
-      const uid = uuidv4() + '@uek-ics-generator';
+      const uid = uuidv4() + '@uek-ics';
 
       lines.push('BEGIN:VEVENT');
       lines.push('UID:' + uid);
@@ -65,7 +69,7 @@ function buildICS(events) {
       lines.push('LOCATION:' + (ev.room || '').replace(/[\n\r,]/g, ' '));
       lines.push('END:VEVENT');
     } catch (e) {
-      console.error('Event build error', e, ev);
+      console.error('Error building event', e, ev);
     }
   }
 
@@ -73,25 +77,17 @@ function buildICS(events) {
   return lines.join('\r\n');
 }
 
+// --- Endpoint ICS ---
 app.get('/calendar.ics', async (req, res) => {
   const sourceUrl = req.query.url || DEFAULT_URL;
-
   try {
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath,
-      headless: chromium.headless
-    });
+    const response = await fetch(sourceUrl, { headers: { 'User-Agent': 'UEK-ICS-Generator/1.0' } });
+    if (!response.ok) return res.status(502).send('Bad upstream response');
 
-    const page = await browser.newPage();
-    await page.goto(sourceUrl, { waitUntil: 'networkidle0' });
-
-    const html = await page.content();
-    await browser.close();
-
+    const html = await response.text();
     const events = parseSchedulePage(html);
-    if (events.length === 0) return res.status(500).send('No events parsed from source page');
+
+    if (!events.length) return res.status(500).send('No events parsed (layout may have changed)');
 
     const ics = buildICS(events);
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
@@ -103,14 +99,16 @@ app.get('/calendar.ics', async (req, res) => {
   }
 });
 
+// --- Root ---
 app.get('/', (req, res) => {
   res.send(`
-    <h3>UEK ICS generator</h3>
+    <h3>UEK ICS Generator</h3>
     <p>Endpoint: <a href="/calendar.ics">/calendar.ics</a></p>
     <p>To use different plan URL: <code>/calendar.ics?url=ENCODED_URL</code></p>
   `);
 });
 
+// --- Start server ---
 app.listen(PORT, '0.0.0.0', () => {
   console.log('Server running on port', PORT);
 });
