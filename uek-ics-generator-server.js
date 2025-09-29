@@ -1,10 +1,10 @@
 /*
-UEK ICS Generator (Node.js + Express + puppeteer-core)
-Pobiera harmonogram z UEK i generuje plik .ics
+UEK schedule -> ICS generator (Node.js + Express + Playwright)
 */
 
 const express = require('express');
-const puppeteer = require('puppeteer-core');
+const { chromium } = require('@playwright/chromium');
+const cheerio = require('cheerio');
 const { DateTime } = require('luxon');
 const { v4: uuidv4 } = require('uuid');
 
@@ -19,9 +19,8 @@ function clean(s) {
   return (s || '').replace(/\s+/g, ' ').trim();
 }
 
-// --- Parser z HTML ---
+// --- Parser HTML ---
 function parseSchedulePage(html) {
-  const cheerio = require('cheerio');
   const $ = cheerio.load(html);
   const events = [];
 
@@ -48,7 +47,7 @@ function parseSchedulePage(html) {
   return events;
 }
 
-// --- Budowanie ICS ---
+// --- Build ICS ---
 function buildICS(events) {
   const lines = [];
   lines.push('BEGIN:VCALENDAR');
@@ -82,23 +81,18 @@ function buildICS(events) {
   return lines.join('\r\n');
 }
 
-// --- Endpoint ICS ---
+// --- Endpoint ICS z Playwright ---
 app.get('/calendar.ics', async (req, res) => {
   const sourceUrl = req.query.url || DEFAULT_URL;
-
+  let browser;
   try {
-    // --- Puppeteer-core + systemowy Chromium ---
-    const browser = await puppeteer.launch({
-      executablePath: '/usr/bin/chromium-browser', // systemowy Chromium w Railway
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-
+    browser = await chromium.launch({ args: ['--no-sandbox'], headless: true });
     const page = await browser.newPage();
-    await page.goto(sourceUrl, { waitUntil: 'networkidle0' });
-    const html = await page.content();
-    await browser.close();
+    await page.goto(sourceUrl, { waitUntil: 'networkidle' });
 
+    const html = await page.content();
     const events = parseSchedulePage(html);
+
     if (!events.length) return res.status(500).send('No events parsed (layout may have changed)');
 
     const ics = buildICS(events);
@@ -108,10 +102,12 @@ app.get('/calendar.ics', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).send('Error: ' + err.message);
+  } finally {
+    if (browser) await browser.close();
   }
 });
 
-// --- Root UI ---
+// --- Root ---
 app.get('/', (req, res) => {
   res.send(`
     <h3>UEK ICS Generator</h3>
