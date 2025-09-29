@@ -1,9 +1,9 @@
 /*
-UEK schedule -> ICS generator (Node.js + Express + Puppeteer)
+UEK schedule -> ICS generator (Node.js + Express + Puppeteer-Core)
 */
 
 const express = require('express');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 const cheerio = require('cheerio');
 const { DateTime } = require('luxon');
 const { v4: uuidv4 } = require('uuid');
@@ -81,11 +81,14 @@ function buildICS(events) {
   return lines.join('\r\n');
 }
 
-// --- Endpoint ICS z Puppeteer ---
+// --- Endpoint ICS z Puppeteer-Core ---
 app.get('/calendar.ics', async (req, res) => {
   const sourceUrl = req.query.url || DEFAULT_URL;
   try {
-    const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+    const browser = await puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath: process.env.CHROME_BIN || '/usr/bin/chromium-browser'
+    });
     const page = await browser.newPage();
     await page.goto(sourceUrl, { waitUntil: 'networkidle0' });
 
