@@ -1,1 +1,1 @@
-web: node uek-ics-generator-server.js
+web: npm start
