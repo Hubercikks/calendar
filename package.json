@@ -12,6 +12,6 @@
     "node-fetch": "2.6.7",
     "uuid": "^9.0.0",
     "cheerio": "^1.0.0-rc.12",
-    "puppeteer-core": "^21.4.0"
+    "@playwright/chromium": "^1.38.0"
   }
 }
