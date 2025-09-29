@@ -1,9 +1,9 @@
 /*
-UEK schedule -> ICS generator (Node.js + Express)
+UEK schedule -> ICS generator (Node.js + Express + Puppeteer)
 */
 
 const express = require('express');
-const fetch = require('node-fetch');
+const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const { DateTime } = require('luxon');
 const { v4: uuidv4 } = require('uuid');
@@ -19,7 +19,7 @@ function clean(s) {
   return (s || '').replace(/\s+/g, ' ').trim();
 }
 
-// --- Parser dla nowego układu UEK ---
+// --- Parser dla tabeli UEK ---
 function parseSchedulePage(html) {
   const $ = cheerio.load(html);
   const events = [];
@@ -81,13 +81,16 @@ function buildICS(events) {
   return lines.join('\r\n');
 }
 
-// --- Endpoint ICS ---
+// --- Endpoint ICS z Puppeteer ---
 app.get('/calendar.ics', async (req, res) => {
   const sourceUrl = req.query.url || DEFAULT_URL;
   try {
-    const r = await fetch(sourceUrl, { headers: { 'User-Agent': 'UEK-ICS-Generator/1.0' } });
-    if (!r.ok) return res.status(502).send('Bad upstream response');
-    const html = await r.text();
+    const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+    const page = await browser.newPage();
+    await page.goto(sourceUrl, { waitUntil: 'networkidle0' });
+
+    const html = await page.content();
+    await browser.close();
 
     const events = parseSchedulePage(html);
     if (events.length === 0) return res.status(500).send('No events parsed from source page');
@@ -95,6 +98,7 @@ app.get('/calendar.ics', async (req, res) => {
     const ics = buildICS(events);
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
     res.send(ics);
+
   } catch (err) {
     console.error(err);
     res.status(500).send('Error: ' + err.message);
