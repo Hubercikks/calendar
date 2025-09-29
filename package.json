@@ -11,7 +11,7 @@
     "luxon": "^3.4.3",
     "uuid": "^9.0.0",
     "cheerio": "^1.0.0-rc.12",
-    "puppeteer-core": "^21.4.0",
-    "chrome-aws-lambda": "18.1.1"
+    "puppeteer-core": "^19.8.5",
+    "chrome-aws-lambda": "^19.8.0"
   }
 }
