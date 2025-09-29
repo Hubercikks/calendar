@@ -1,5 +1,5 @@
 const express = require('express');
-const fetch = require('node-fetch');
+const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const { DateTime } = require('luxon');
 const { v4: uuidv4 } = require('uuid');
@@ -20,7 +20,6 @@ function parseSchedulePage(html) {
   const $ = cheerio.load(html);
   const events = [];
 
-  // Zmieniamy selektor, aby dopasować do aktualnej struktury tabeli
   $('table.table.table-bordered tbody tr').each((_, row) => {
     const cells = $(row).find('td');
     if (cells.length >= 6) {
@@ -78,16 +77,19 @@ function buildICS(events) {
   return lines.join('\r\n');
 }
 
-// --- Endpoint ICS ---
+// --- Endpoint ICS z Puppeteer ---
 app.get('/calendar.ics', async (req, res) => {
   const sourceUrl = req.query.url || DEFAULT_URL;
   try {
-    const response = await fetch(sourceUrl, { headers: { 'User-Agent': 'UEK-ICS-Generator/1.0' } });
-    if (!response.ok) return res.status(502).send('Bad upstream response');
+    const browser = await puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    const page = await browser.newPage();
+    await page.goto(sourceUrl, { waitUntil: 'networkidle0' });
+    const html = await page.content();
+    await browser.close();
 
-    const html = await response.text();
     const events = parseSchedulePage(html);
-
     if (!events.length) return res.status(500).send('No events parsed (layout may have changed)');
 
     const ics = buildICS(events);
