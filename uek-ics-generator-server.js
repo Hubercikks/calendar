@@ -1,10 +1,6 @@
-/*
-UEK schedule -> ICS generator (Node.js + Express + Puppeteer-Core + chrome-aws-lambda)
-*/
-
 const express = require('express');
-const puppeteer = require('puppeteer-core');
 const chromium = require('chrome-aws-lambda');
+const puppeteer = require('puppeteer-core');
 const cheerio = require('cheerio');
 const { DateTime } = require('luxon');
 const { v4: uuidv4 } = require('uuid');
@@ -15,16 +11,13 @@ const PORT = process.env.PORT || 3000;
 const DEFAULT_URL = 'https://planzajec.uek.krakow.pl/index.php?typ=G&id=187131&okres=2';
 const TIMEZONE = 'Europe/Warsaw';
 
-// --- Helpers ---
 function clean(s) {
   return (s || '').replace(/\s+/g, ' ').trim();
 }
 
-// --- Parser dla tabeli UEK ---
 function parseSchedulePage(html) {
   const $ = cheerio.load(html);
   const events = [];
-
   $('table.table.table-bordered tr').each((_, row) => {
     const cells = $(row).find('td');
     if (cells.length >= 6) {
@@ -44,11 +37,9 @@ function parseSchedulePage(html) {
       events.push({ date, start, end, title: subject, type, teacher, room });
     }
   });
-
   return events;
 }
 
-// --- Budowanie ICS ---
 function buildICS(events) {
   const lines = [];
   lines.push('BEGIN:VCALENDAR');
@@ -66,7 +57,7 @@ function buildICS(events) {
 
       lines.push('BEGIN:VEVENT');
       lines.push('UID:' + uid);
-      lines.push('DTSTAMP:' + DateTime.utc().toFormat("yyyyLLdd\'T\'HHmmss\'Z\'"));
+      lines.push('DTSTAMP:' + DateTime.utc().toFormat("yyyyLLdd'T'HHmmss'Z'"));
       lines.push('DTSTART;TZID=' + TIMEZONE + ':' + fmt(dtStart));
       lines.push('DTEND;TZID=' + TIMEZONE + ':' + fmt(dtEnd));
       lines.push('SUMMARY:' + (ev.title || '').replace(/[\n\r,]/g, ' '));
@@ -82,15 +73,15 @@ function buildICS(events) {
   return lines.join('\r\n');
 }
 
-// --- Endpoint ICS z Puppeteer-Core + chrome-aws-lambda ---
 app.get('/calendar.ics', async (req, res) => {
   const sourceUrl = req.query.url || DEFAULT_URL;
+
   try {
     const browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath,
-      headless: chromium.headless,
+      headless: chromium.headless
     });
 
     const page = await browser.newPage();
@@ -112,7 +103,6 @@ app.get('/calendar.ics', async (req, res) => {
   }
 });
 
-// --- Root UI ---
 app.get('/', (req, res) => {
   res.send(`
     <h3>UEK ICS generator</h3>
@@ -121,7 +111,6 @@ app.get('/', (req, res) => {
   `);
 });
 
-// --- Start server ---
 app.listen(PORT, '0.0.0.0', () => {
   console.log('Server running on port', PORT);
 });
